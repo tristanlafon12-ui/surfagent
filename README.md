@@ -43,7 +43,7 @@ Python · FastAPI · Stormglass API · Mistral (tool-calling) · SendGrid · Lea
 
 1. Copy `.env.example` to `.env` and fill in your API keys (Stormglass, Mistral, SendGrid).
 2. Install dependencies: `pip install -r requirements.txt`
-3. Run the API: `uvicorn 04_api:app --reload`
+3. Start the server: `python 04_api.py`
 4. Open `index.html` for the map and chat interface.
 
 ---
