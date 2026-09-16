@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SurfAgent</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; color: #1e293b; height: 100vh; display: flex; flex-direction: column; }
+
+    /* Header */
+    header { padding: 12px 20px; background: white; border-bottom: 0.5px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    header h1 { font-size: 1.05rem; font-weight: 600; color: #0f172a; }
+    header span { font-size: 0.75rem; color: #94a3b8; }
+    #reset-btn { background: none; border: 0.5px solid #e2e8f0; color: #94a3b8; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 0.78rem; }
+    #reset-btn:hover { border-color: #0ea5e9; color: #0ea5e9; }
+
+    /* Tabs */
+    .tabs { display: flex; background: white; border-bottom: 0.5px solid #e2e8f0; flex-shrink: 0; }
+    .tab { padding: 9px 20px; cursor: pointer; font-size: 0.82rem; color: #94a3b8; border-bottom: 2px solid transparent; }
+    .tab.active { color: #0ea5e9; border-bottom-color: #0ea5e9; }
+
+    /* Panels */
+    .panel { flex: 1; display: none; flex-direction: column; overflow: hidden; min-height: 0; }
+    .panel.active { display: flex; }
+
+    /* ── Chat ── */
+    #chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; }
+    .msg { max-width: 78%; padding: 11px 15px; border-radius: 12px; line-height: 1.6; font-size: 0.87rem; white-space: pre-wrap; }
+    .msg.user  { align-self: flex-end; background: #0ea5e9; color: white; border-bottom-right-radius: 4px; }
+    .msg.agent { align-self: flex-start; background: white; border: 0.5px solid #e2e8f0; border-bottom-left-radius: 4px; }
+    .msg.agent strong { color: #0ea5e9; }
+    .msg.thinking { align-self: flex-start; background: white; border: 0.5px solid #e2e8f0; color: #94a3b8; font-style: italic; }
+    .dot { animation: blink 1.4s infinite; } .dot:nth-child(2){animation-delay:.2s} .dot:nth-child(3){animation-delay:.4s}
+    @keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
+    .suggestions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 24px 10px; }
+    .chip { background: white; border: 0.5px solid #e2e8f0; color: #64748b; padding: 5px 12px; border-radius: 20px; font-size: 0.78rem; cursor: pointer; }
+    .chip:hover { border-color: #0ea5e9; color: #0ea5e9; }
+    #chat-input-row { padding: 12px 20px; background: white; border-top: 0.5px solid #e2e8f0; display: flex; gap: 10px; flex-shrink: 0; }
+    #chat-input { flex: 1; background: #f8fafc; border: 0.5px solid #e2e8f0; border-radius: 8px; color: #1e293b; padding: 9px 14px; font-size: 0.87rem; outline: none; }
+    #chat-input:focus { border-color: #0ea5e9; }
+    #chat-input::placeholder { color: #cbd5e1; }
+    #send-btn { background: #0ea5e9; border: none; border-radius: 8px; color: white; padding: 9px 18px; font-size: 0.87rem; cursor: pointer; }
+    #send-btn:hover { background: #0284c7; }
+    #send-btn:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
+
+    /* ── Carte ── */
+    #map { flex: 1; min-height: 0; }
+    #map-controls { padding: 10px 20px; background: white; border-top: 0.5px solid #e2e8f0; flex-shrink: 0; }
+    #map-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    #refresh-btn { background: #0ea5e9; border: none; border-radius: 7px; color: white; padding: 7px 14px; font-size: 0.82rem; cursor: pointer; }
+    #refresh-btn:hover { background: #0284c7; }
+    #refresh-btn:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
+    #map-status { font-size: 0.75rem; color: #94a3b8; }
+    #creneau-label { font-size: 0.88rem; color: #0f172a; font-weight: 500; margin-left: auto; }
+    #timeline-wrap { overflow-x: auto; }
+    #timeline { display: flex; min-width: max-content; }
+    .day-group { display: flex; flex-direction: column; border-right: 0.5px solid #e2e8f0; }
+    .day-lbl { font-size: 0.68rem; color: #94a3b8; padding: 2px 8px; background: #f8fafc; text-align: center; border-bottom: 0.5px solid #e2e8f0; font-weight: 500; }
+    .cr-btns { display: flex; }
+    .cr-btn { padding: 4px 9px; font-size: 0.72rem; color: #94a3b8; cursor: pointer; border: none; background: none; }
+    .cr-btn:hover { color: #0ea5e9; }
+    .cr-btn.active { color: #0ea5e9; background: #e0f2fe; font-weight: 600; border-radius: 4px; }
+
+    /* Légende carte */
+    .map-legend { background: white; border: 0.5px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; font-size: 0.72rem; }
+    .map-legend div { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+    .map-legend div:last-child { margin-bottom: 0; }
+    .leg-bar { width: 18px; height: 5px; border-radius: 3px; }
+
+    /* Labels spots */
+    .spot-label { background: white; border: 0.5px solid #e2e8f0; border-radius: 5px; padding: 3px 7px; font-size: 11px; color: #334155; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .spot-label:hover { border-color: #0ea5e9; }
+    .bar-wrap { width: 36px; height: 5px; background: #f1f5f9; border-radius: 3px; overflow: hidden; }
+    .bar { height: 100%; border-radius: 3px; }
+    .score-val { font-size: 10px; font-weight: 600; min-width: 22px; text-align: right; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🏄 SurfAgent</h1>
+  <span>Côte Atlantique FR + ES · 25 spots</span>
+  <button id="reset-btn">Nouvelle session</button>
+</header>
+
+<div class="tabs">
+  <div class="tab active" id="tab-chat" onclick="switchTab('chat')">💬 Chat</div>
+  <div class="tab"        id="tab-map"  onclick="switchTab('map')">🗺️ Carte</div>
+</div>
+
+<!-- CHAT -->
+<div class="panel active" id="chat-panel">
+  <div id="chat-messages">
+    <div class="msg agent">Salut ! Je suis SurfAgent. Pose-moi tes questions sur les conditions surf sur la côte atlantique française et espagnole.
+
+• "Où surfer ce weekend ?"
+• "Conditions à Mundaka demain matin ?"
+• "Je suis au Pays Basque, où je vais ?"
+• "Quel spot pour du tube en Asturies ?"</div>
+  </div>
+  <div class="suggestions">
+    <div class="chip" onclick="send(this.textContent)">Où surfer ce weekend ?</div>
+    <div class="chip" onclick="send(this.textContent)">Meilleur spot Asturies aujourd'hui</div>
+    <div class="chip" onclick="send(this.textContent)">Conditions à Mundaka ?</div>
+    <div class="chip" onclick="send(this.textContent)">Spot pour du tube ?</div>
+  </div>
+  <div id="chat-input-row">
+    <input type="text" id="chat-input" placeholder="Pose ta question..." autocomplete="off"/>
+    <button id="send-btn">Envoyer</button>
+  </div>
+</div>
+
+<!-- CARTE -->
+<div class="panel" id="map-panel">
+  <div id="map"></div>
+  <div id="map-controls">
+    <div id="map-toolbar">
+      <button id="refresh-btn" onclick="loadForecast()">↻ Actualiser</button>
+      <span id="map-status">Clique sur Actualiser pour charger les prévisions</span>
+      <span id="creneau-label"></span>
+    </div>
+    <div id="timeline-wrap"><div id="timeline"></div></div>
+  </div>
+</div>
+
+<script>
+// ── Tab ────────────────────────────────────────────────────────
+let mapReady = false;
+
+function switchTab(name) {
+  ['chat','map'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t===name);
+    document.getElementById(t+'-panel').classList.toggle('active', t===name);
+  });
+  // Initialiser la carte uniquement quand l'onglet est visible
+  if (name === 'map' && !mapReady) initMap();
+}
+
+// ── Carte ──────────────────────────────────────────────────────
+let map, markers = {}, forecastData = {}, currentLabel = null;
+
+function initMap() {
+  map = L.map('map').setView([44.5, -3.8], 7);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO', maxZoom: 18
+  }).addTo(map);
+
+  const legend = L.control({ position: 'bottomright' });
+  legend.onAdd = () => {
+    const d = L.DomUtil.create('div', 'map-legend');
+    d.innerHTML = `
+      <div><span class="leg-bar" style="background:#16a34a"></span>Score ≥ 7</div>
+      <div><span class="leg-bar" style="background:#d97706"></span>Score 4–7</div>
+      <div><span class="leg-bar" style="background:#dc2626"></span>Score < 4</div>
+      <div><span class="leg-bar" style="background:#cbd5e1"></span>Éliminé</div>`;
+    return d;
+  };
+  legend.addTo(map);
+  map.on('zoomend', updateVisibility);
+  mapReady = true;
+}
+
+function spotColor(score, elimine) {
+  if (elimine) return { bar: '#cbd5e1', txt: '#94a3b8' };
+  if (score >= 7) return { bar: '#16a34a', txt: '#15803d' };
+  if (score >= 4) return { bar: '#d97706', txt: '#b45309' };
+  return { bar: '#dc2626', txt: '#b91c1c' };
+}
+
+function shortName(nom) {
+  return nom.replace('Playa de la ','').replace('Playa de ','')
+            .replace('Plage de ','').replace("Plage d'",'')
+            .replace(' (Liencres)','').split(' (')[0];
+}
+
+function makeMarkers(spot) {
+  const c   = spotColor(spot.score, spot.elimine);
+  const pct = spot.elimine ? 0 : Math.round(spot.score * 10);
+  const nom = shortName(spot.nom);
+  const minZoom = spot.elimine ? 9 : spot.score >= 7 ? 6 : spot.score >= 4 ? 7 : 8;
+
+  const popup = spot.elimine
+    ? `<b>${spot.nom}</b><br><span style="color:#dc2626">✗ ${spot.raison}</span>`
+    : `<b>${spot.nom}</b> <span style="color:#94a3b8">(${spot.region})</span><br>
+       <b style="color:${c.bar}">Score : ${spot.score}/10</b><br>
+       Houle : ${spot.houle} ${spot.dir_houle} (idéal : ${spot.dir_ideale})<br>
+       Période : ${spot.periode}<br>
+       Vent : ${spot.vent} (${spot.vent_qualite})<br>
+       Marée : ${spot.maree} | Vague : ${spot.type_vague} | Crowd : ${spot.crowd}`;
+
+  const icon = L.divIcon({
+    className: '',
+    html: `<div class="spot-label">
+      <span>${nom}</span>
+      <div class="bar-wrap"><div class="bar" style="width:${pct}%;background:${c.bar}"></div></div>
+      <span class="score-val" style="color:${c.txt}">${spot.elimine ? '✗' : spot.score}</span>
+    </div>`,
+    iconSize: null, iconAnchor: [0, 10]
+  });
+
+  const label = L.marker([spot.lat, spot.lng], { icon }).bindPopup(popup);
+  const dot   = L.circleMarker([spot.lat, spot.lng], {
+    radius: 3, fillColor: c.bar, fillOpacity: 1, color: 'white', weight: 1.5
+  }).bindPopup(popup);
+
+  return { label, dot, minZoom };
+}
+
+function renderCreneau(lbl) {
+  currentLabel = lbl;
+  document.getElementById('creneau-label').textContent = lbl;
+  document.querySelectorAll('.cr-btn').forEach(b => b.classList.toggle('active', b.dataset.lbl === lbl));
+
+  Object.values(markers).forEach(({label, dot}) => {
+    if (map.hasLayer(label)) map.removeLayer(label);
+    if (map.hasLayer(dot))   map.removeLayer(dot);
+  });
+  markers = {};
+
+  const zoom = map.getZoom();
+  (forecastData[lbl] || []).forEach(spot => {
+    const m = makeMarkers(spot);
+    markers[spot.nom] = m;
+    m.dot.addTo(map);
+    if (zoom >= m.minZoom) m.label.addTo(map);
+  });
+}
+
+function updateVisibility() {
+  if (!currentLabel) return;
+  const zoom = map.getZoom();
+  Object.values(markers).forEach(({label, minZoom}) => {
+    if (zoom >= minZoom) { if (!map.hasLayer(label)) label.addTo(map); }
+    else                 { if (map.hasLayer(label))  map.removeLayer(label); }
+  });
+}
+
+function buildTimeline(data) {
+  const tl = document.getElementById('timeline');
+  tl.innerHTML = '';
+  const byDay = {};
+  Object.keys(data).sort().forEach(lbl => {
+    const d = lbl.split(' ')[0];
+    (byDay[d] = byDay[d] || []).push(lbl);
+  });
+  Object.entries(byDay).forEach(([date, lbls]) => {
+    const grp = document.createElement('div');
+    grp.className = 'day-group';
+    grp.innerHTML = `<div class="day-lbl">${date}</div>`;
+    const row = document.createElement('div');
+    row.className = 'cr-btns';
+    lbls.forEach(lbl => {
+      const b = document.createElement('button');
+      b.className = 'cr-btn';
+      b.textContent = lbl.split(' ')[1];
+      b.dataset.lbl = lbl;
+      b.onclick = () => renderCreneau(lbl);
+      row.appendChild(b);
+    });
+    grp.appendChild(row);
+    tl.appendChild(grp);
+  });
+}
+
+async function loadForecast() {
+  const btn = document.getElementById('refresh-btn');
+  const status = document.getElementById('map-status');
+  btn.disabled = true;
+  status.textContent = 'Chargement…';
+
+  // La carte doit être initialisée avant d'ajouter des markers
+  if (!mapReady) { initMap(); }
+
+  try {
+    const r = await fetch('/forecast');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    forecastData = await r.json();
+    if (!Object.keys(forecastData).length) throw new Error('Données vides');
+    buildTimeline(forecastData);
+    renderCreneau(Object.keys(forecastData).sort()[0]);
+    status.textContent = `${Object.keys(forecastData).length} créneaux chargés ✓`;
+  } catch(e) {
+    status.textContent = `Erreur : ${e.message}`;
+  }
+  btn.disabled = false;
+}
+
+// ── Chat ───────────────────────────────────────────────────────
+const msgs    = document.getElementById('chat-messages');
+const input   = document.getElementById('chat-input');
+const sendBtn = document.getElementById('send-btn');
+
+function addMsg(text, type) {
+  const d = document.createElement('div');
+  d.className = `msg ${type}`;
+  if (type === 'agent') d.innerHTML = text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+  else d.textContent = text;
+  msgs.appendChild(d);
+  msgs.scrollTop = msgs.scrollHeight;
+  return d;
+}
+
+async function send(text) {
+  if (!text?.trim()) return;
+  addMsg(text, 'user');
+  input.value = '';
+  sendBtn.disabled = true;
+  const t = addMsg('Réflexion <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>', 'thinking');
+  try {
+    const r = await fetch('/chat', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({message: text})
+    });
+    t.remove();
+    addMsg((await r.json()).response, 'agent');
+  } catch(e) {
+    t.remove();
+    addMsg('Erreur de connexion.', 'agent');
+  }
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+sendBtn.onclick = () => send(input.value);
+input.onkeydown = e => { if (e.key==='Enter') { e.preventDefault(); send(input.value); }};
+document.getElementById('reset-btn').onclick = () => {
+  msgs.innerHTML = '';
+  addMsg('Session réinitialisée.', 'agent');
+};
+</script>
+</body>
+</html>
